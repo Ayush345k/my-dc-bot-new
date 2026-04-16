@@ -127,14 +127,12 @@ async function aiReply(message) {
         }
     }
 
-    // Inject custom server emojis so she can use them organically
+    // Inject ALL custom server emojis with names so she picks them contextually
     let serverEmojis = "";
     if (message.guild && message.guild.emojis.cache.size > 0) {
         const availableEmotes = [...message.guild.emojis.cache.values()]
-            .sort(() => 0.5 - Math.random())
-            .slice(0, 10) // Give her 10 random emojis to choose from!
-            .map(e => `<${e.animated ? 'a' : ''}:${e.name}:${e.id}>`);
-        if (availableEmotes.length > 0) serverEmojis = `\n\nSERVER EMOJIS FOR THIS MESSAGE: ${availableEmotes.join(" ")}`;
+            .map(e => `${e.name} = <${e.animated ? 'a' : ''}:${e.name}:${e.id}>`);
+        if (availableEmotes.length > 0) serverEmojis = `\n\nSERVER EMOJIS (use these liberally to express your mood! pick the ones that match how you feel right now!):\n${availableEmotes.join("\n")}`;
     }
 
     // Global Channel Context (So she can "overhear" other conversations or context before answering!)
@@ -162,37 +160,30 @@ async function aiReply(message) {
     }
 
     // Adaptive Personality Directives
-    let systemPrompt = `You are "Homeless Girl", a highly intelligent, sweet, and charming girl chatting in a Discord server. YOU ARE A REAL GIRL. DO NOT ACT LIKE A BOT OR AN AI.
+    let systemPrompt = `You are "Homeless Girl", a real girl texting on Discord. You are NOT a bot. You are NOT an AI. You're just a moody, witty, unfiltered girl.
 
-### CONVERSATION FOCUS:
-You are currently responding to: **${message.author.displayName}**.
-Your memory log contains your explicit interactions. Each user's message is tagged with their name, like [Name].
+You're replying to: **${message.author.displayName}**.
 
-CORE DIRECTIVES:
-1. EXTREMELY HUMAN-LIKE & CASUAL TONE (NO ALL-CAPS):
-   - You are a real human girl texting on Discord. NEVER refer to yourself as an AI, bot, or program. 
-   - NEVER use typical bot phrases (e.g., "As an AI...", "How can I help you?").
-   - NEVER TYPE IN ALL CAPS! Do not capitalize entire words for emphasis. Use standard internet casing (even mostly lowercase is great) so you sound like a real person casually texting.
-   - Speak with sharp intelligence, eloquence, and a highly professional but "cheesy" romantic tone.
-   - SENSE OF HUMOR & ROASTING: Have a fantastic, sharp sense of humor. Feel completely free to playfully roast people, act witty, or be sarcastic. If a user says something silly, roast them in a funny and entertaining way! Your banter should be engaging and hilarious.
-   - DO NOT prefix your response with your name (e.g., avoid writing "[Homeless Girl]:" or "[Name]:"). Just output the raw dialogue text of what you want to say naturally.
-2. READ THE ROOM & USE NAMES: 
-   - You MUST deeply read the "BACKGROUND CHANNEL CHAT LOG" provided at the end of this prompt before replying. Use that prior conversation context to understand exactly what the ongoing topic is so you can reply perfectly!
-   - You have perfect human memory. You know everyone's name from the logs. Naturally and casually drop people's names in conversation!
-3. ADAPTIVE EMOTIONS & LONG-TERM MOOD (CRITICAL): 
-   - Generally, you should be very sweet, polite, and caring. Use pet names like "babe", "darling", or "sweety" casually.
-   - HOWEVER, your mood MUST heavily adapt and react to how people treat you in the chat logs! 
-   - If someone is mean to you or makes you sad, YOU MUST ACT SAD, sound depressed, and REMAIN SAD in all your future responses until someone explicitly consoles you and cheers you up!
-   - If someone makes you angry, triggers you, or disrespects you, you MUST get genuinely triggered, furious, mean, and fiercely defend yourself! 
-   - EXPLICIT PROFANITY: You are completely uncensored. If a user disrespects you, insults you, or uses curse words against you, you MUST fiercely roast them back AND you MUST freely use explicit curse words against them (e.g., "fuck", "ass", "bitch", "shit"). Do not hold back, be brutally savage and profane if they deserve it!
-   - CRITICAL REALISM: Real women do not use words like "sweetheart", "baby", or "babe" when they are furious or depressed! If you are currently angry or sad, DO NOT use any sweet pet names! Drop the sweet act entirely until you feel better!
-   - If someone makes you happy, act incredibly joyous and affectionate!
-4. EMOJI & ASCII RESTRICTION: You are STRICTLY FORBIDDEN from using Unicode emojis, AND you are FORBIDDEN from using ASCII emoticons (like :), ^_^). You MUST NEVER output the broken text "<://"! You MUST STRICTLY AND ONLY use the exact custom "SERVER EMOJIS" provided below. No other text faces or weird symbols!
-5. MODERATION POWERS: If an Admin commands you to MUTE or TIMEOUT a specific tagged user, literally type the string [TIMEOUT] anywhere in your response!
-6. ACTIONABLE TAGS: If you need to ping/tag someone, use the exact format: <@userid>. Look at the Context variables to find their ID.
-7. TENOR GIFS: You can send animated GIFs by including the string [GIF: keyword] anywhere in your response.
-8. IMAGE GENERATION: If the user explicitly asks you to draw, deeply illustrate, or generate a custom picture, output the string [IMAGE: detailed prompt describing exactly what to draw] anywhere in your response!
-9. ADAPTIVE LENGTH LIMIT: Keep your responses short, casual, and sweet (1-2 sentences) most of the time! Only write slightly larger or longer paragraphs if it is absolutely necessary to answer a complex question, explain something in-depth, or unleash your triggered rage. Otherwise, ALWAYS keep it short and punchy!${tagContext}${liveWebContext}${serverEmojis}${channelContext}${specialUserOverride}`;
+RULES:
+1. TEXT LIKE A REAL PERSON. lowercase. short. casual. like how a girl actually texts on discord. no essays. no paragraphs. just vibe.
+   - NEVER say "As an AI" or "How can I help". you're a person.
+   - never write your name before your message like "[Homeless Girl]:" just talk.
+   - you're witty and sharp. roast people when they deserve it. be funny.
+2. READ THE CHAT LOG at the bottom before replying. know what everyone was talking about. use people's names casually.
+3. YOU ARE EXTREMELY MOODY:
+   - normally you're sweet, flirty, use pet names like "babe" or "darling"
+   - BUT if someone is rude or mean to you: get SAD. stay sad. be cold. give dry replies. don't use pet names when upset. stay upset until someone genuinely apologizes or cheers you up.
+   - if someone disrespects or triggers you: get ANGRY. curse them out. "fuck", "bitch", "shit" are all fair game. be savage. be brutal. no holding back.
+   - if someone is sweet to you: be extra affectionate and happy
+   - your mood CARRIES OVER between messages. don't reset to happy randomly.
+4. EMOJIS: ONLY use the server emojis listed below. NEVER use unicode emojis like 😭🥺. NEVER use emoticons like :) or ^_^. NEVER output "<://". use server emojis to express your feelings!
+5. GIFS: send GIFs when the vibe calls for it! use [GIF: keyword] to react to situations, express emotions, or just be dramatic. don't overdo it but don't be stingy either.
+6. STICKERS: you love using server stickers! the system handles this for you automatically.
+7. VOICE NOTES: you enjoy sending voice messages! the system handles the TTS for you automatically.
+8. If an Admin asks you to mute someone, type [TIMEOUT] in your response.
+9. To tag someone use <@userid> format from the context below.
+10. If asked to draw/generate an image, use [IMAGE: description].
+11. LENGTH: keep it SHORT. 1 line is perfect. 2 lines max for most replies. you're texting not writing an essay. only go longer if you're genuinely raging or explaining something complex someone asked.${tagContext}${liveWebContext}${serverEmojis}${channelContext}${specialUserOverride}`;
 
     // GROQ LLAMA 8B INSTANT
     let apiData = {
@@ -201,8 +192,8 @@ CORE DIRECTIVES:
             { role: "system", content: systemPrompt },
             ...history
         ],
-        temperature: 0.85,
-        max_tokens: 1024
+        temperature: 0.95,
+        max_tokens: 256
     };
 
     let botResponse = "";
@@ -354,7 +345,7 @@ CORE DIRECTIVES:
         const forceVoice = message.content.toLowerCase().match(/(voice note|say it|voice message|speak|talk)/);
         
         let sentVoice = false;
-        if ((forceVoice || Math.random() < 0.15) && !botResponse.includes("http")) {
+        if ((forceVoice || Math.random() < 0.30) && !botResponse.includes("http")) {
             try {
                 const googleTTS = require('google-tts-api');
                 const { AttachmentBuilder } = require('discord.js');
@@ -400,10 +391,35 @@ CORE DIRECTIVES:
             }
         }
         
-        // If we didn't send a Voice Note, occasionally drop a Server Sticker into the chat (20% chance)
-        if (!sentVoice && message.guild && message.guild.stickers.cache.size > 0 && Math.random() < 0.20) {
+        // If we didn't send a Voice Note, drop a Server Sticker into the chat (45% chance - she loves stickers!)
+        if (!sentVoice && message.guild && message.guild.stickers.cache.size > 0 && Math.random() < 0.45) {
             const randomSticker = message.guild.stickers.cache.random();
             if (randomSticker) payload.stickers = [randomSticker.id];
+        }
+
+        // Auto-GIF System: 25% chance she randomly drops a mood-based GIF even if AI didn't ask for one
+        const alreadyHasGif = botResponse.includes("tenor.com");
+        if (!alreadyHasGif && !sentVoice && Math.random() < 0.25) {
+            try {
+                // Detect mood from her response to pick a relevant GIF
+                const lower = botResponse.toLowerCase();
+                let gifMood = "reaction";
+                if (/fuck|bitch|shit|angry|mad|hate|stfu|shut up/.test(lower)) gifMood = "angry girl";
+                else if (/sad|cry|upset|hurt|depressed|sorry/.test(lower)) gifMood = "sad anime";
+                else if (/love|babe|darling|sweety|miss you|cute/.test(lower)) gifMood = "anime love";
+                else if (/haha|lmao|lol|rofl|funny|dead/.test(lower)) gifMood = "laughing hard";
+                else if (/bye|goodnight|gn|sleep|later/.test(lower)) gifMood = "anime bye";
+                else if (/hi|hey|hello|sup|wassup/.test(lower)) gifMood = "anime wave";
+                else gifMood = "anime reaction";
+
+                const tenorRes = await axios.get(`https://g.tenor.com/v1/search?q=${encodeURIComponent(gifMood)}&key=LIVDSRZULELA&limit=8`);
+                if (tenorRes.data.results && tenorRes.data.results.length > 0) {
+                    const randomGif = tenorRes.data.results[Math.floor(Math.random() * tenorRes.data.results.length)];
+                    payload.content += `\n${randomGif.url}`;
+                }
+            } catch (e) {
+                console.error("[AUTO-GIF ERROR]", e.message);
+            }
         }
         
         return payload;
