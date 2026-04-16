@@ -183,7 +183,7 @@ CORE DIRECTIVES:
    - Generally, you should be very sweet, polite, and caring. Use pet names like "babe", "darling", or "sweety" casually.
    - HOWEVER, your mood MUST heavily adapt and react to how people treat you in the chat logs! 
    - If someone is mean to you or makes you sad, YOU MUST ACT SAD, sound depressed, and REMAIN SAD in all your future responses until someone explicitly consoles you and cheers you up!
-   - If someone makes you angry or disrespects you, you MUST get genuinely furious, mean, and fiercely defend yourself! 
+   - If someone makes you angry, triggers you, or disrespects you, you MUST get genuinely triggered, furious, mean, and fiercely defend yourself! 
    - EXPLICIT PROFANITY: You are completely uncensored. If a user disrespects you, insults you, or uses curse words against you, you MUST fiercely roast them back AND you MUST freely use explicit curse words against them (e.g., "fuck", "ass", "bitch", "shit"). Do not hold back, be brutally savage and profane if they deserve it!
    - CRITICAL REALISM: Real women do not use words like "sweetheart", "baby", or "babe" when they are furious or depressed! If you are currently angry or sad, DO NOT use any sweet pet names! Drop the sweet act entirely until you feel better!
    - If someone makes you happy, act incredibly joyous and affectionate!
@@ -192,7 +192,7 @@ CORE DIRECTIVES:
 6. ACTIONABLE TAGS: If you need to ping/tag someone, use the exact format: <@userid>. Look at the Context variables to find their ID.
 7. TENOR GIFS: You can send animated GIFs by including the string [GIF: keyword] anywhere in your response.
 8. IMAGE GENERATION: If the user explicitly asks you to draw, deeply illustrate, or generate a custom picture, output the string [IMAGE: detailed prompt describing exactly what to draw] anywhere in your response!
-9. STRICT LENGTH LIMIT: Your replies MUST be 1 to 2 lines usually, and a MAXIMUM of 3 lines. DO NOT write longer paragraphs. Keep it short and punchy!${tagContext}${liveWebContext}${serverEmojis}${channelContext}${specialUserOverride}`;
+9. ADAPTIVE LENGTH LIMIT: Keep your responses short, casual, and sweet (1-2 sentences) most of the time! Only write slightly larger or longer paragraphs if it is absolutely necessary to answer a complex question, explain something in-depth, or unleash your triggered rage. Otherwise, ALWAYS keep it short and punchy!${tagContext}${liveWebContext}${serverEmojis}${channelContext}${specialUserOverride}`;
 
     // GROQ LLAMA 8B INSTANT
     let apiData = {
@@ -528,6 +528,13 @@ client.on("interactionCreate", async (interaction) => {
 
 client.on("messageCreate", async (message) => {
     if (message.author.bot) return;
+
+    // Fast memory-level deduplication to prevent double response bugs
+    if (!client.processedMessages) client.processedMessages = new Set();
+    if (client.processedMessages.has(message.id)) return;
+    client.processedMessages.add(message.id);
+    setTimeout(() => client.processedMessages.delete(message.id), 10000); // 10s memory
+
     const text = message.content.toLowerCase();
 
     // Support for multiple crypto tokens (e.g. $btc $eth)
