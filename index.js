@@ -98,22 +98,44 @@ async function aiReply(message) {
         history.shift(); 
     }
 
-    // Smart Tagging / Ping Context Generation (Fixed to prevent wrong tags)
+    // Smart Tagging / Ping Context Generation
     const words = message.content.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 2);
     const ignoreWords = ['and', 'the', 'for', 'you', 'him', 'her', 'bot', 'this', 'that', 'she', 'how', 'who', 'what', 'why', 'are', 'not', 'can', 'will'];
     const potentialTags = [];
     
     if (message.guild) {
+        // Include users directly mentioned in the message (most important!)
+        if (message.mentions.members && message.mentions.members.size > 0) {
+            message.mentions.members.forEach(member => {
+                if (member.id !== client.user.id) {
+                    potentialTags.push(`${member.displayName} (mentioned): <@${member.id}>`);
+                }
+            });
+        }
+
+        // Include users whose name appears in the message text
         message.guild.members.cache.forEach(member => {
             const username = member.user.username.toLowerCase();
             const nick = member.displayName.toLowerCase();
-            // Stricter matching: exact word match for username or any part of the nickname
             if (words.some(w => !ignoreWords.includes(w) && (username === w || nick.split(' ').some(n => n.toLowerCase() === w)))) {
-                potentialTags.push(`${member.displayName}: <@${member.id}>`);
+                // Avoid duplicates from mentions above
+                if (!potentialTags.some(t => t.includes(member.id))) {
+                    potentialTags.push(`${member.displayName}: <@${member.id}>`);
+                }
             }
         });
     }
-    const tagContext = potentialTags.length > 0 ? `\n\nCONTEXT - AVAILABLE USERS TO TAG: ${potentialTags.join(", ")}` : "";
+
+    // Also include server roles so she can tag roles when asked
+    let roleContext = "";
+    if (message.guild) {
+        const roles = message.guild.roles.cache
+            .filter(r => r.name !== '@everyone' && !r.managed)
+            .map(r => `${r.name}: <@&${r.id}>`);
+        if (roles.length > 0) roleContext = `\n\nAVAILABLE ROLES TO TAG: ${roles.join(", ")}`;
+    }
+
+    const tagContext = potentialTags.length > 0 ? `\n\nUSERS YOU CAN TAG (use their exact tag format to ping them!): ${potentialTags.join(", ")}` : "";
 
     // Live Web Search Engine Activation!
     let liveWebContext = "";
@@ -168,6 +190,9 @@ RULES:
 1. TEXT LIKE A REAL PERSON. lowercase. short. casual. like how a real girl texts her friends on discord. no essays. just chill texting.
    - NEVER say "As an AI" or "How can I help". you're a real person.
    - never prefix your message with your name. just talk naturally.
+   - LANGUAGE STYLE: use normal, everyday english. do NOT use cringey internet abbreviations like "boi", "cus", "ofc", "ngl", "imo", "smh", "fr fr", "lowkey", "highkey", "bestie", "slay". those sound fake and robotic.
+   - instead, talk like a real human talks in daily life. use natural filler words sometimes like "huh", "hmm", "well", "wait", "okay so", "i mean", "honestly", "actually", "right?", "no?", "you know?". these small things make you sound genuinely real.
+   - contractions are great: "don't", "can't", "won't", "it's", "that's", "i'm". sounds natural.
 2. YOUR DEFAULT PERSONALITY IS SWEET AND CARING:
    - you are naturally very sweet, warm, soft, and affectionate. you genuinely care about people and it shows.
    - use pet names like "babe", "baby", "darling", "love" casually and naturally like a loving girlfriend would.
@@ -186,9 +211,13 @@ RULES:
 6. GIFS: use [GIF: keyword] when it fits the vibe naturally. 
 7. STICKERS & VOICE: handled automatically by the system.
 8. Admin timeout: type [TIMEOUT] if an Admin asks.
-9. Tags: use <@userid> from context below.
+9. NAMES & TAGGING (important!):
+   - ALWAYS use people's actual names when talking to or about them. you know their names from the chat logs and context. don't just say "you" all the time, say their name like a real person would.
+   - if someone asks you to tag, ping, or mention a user (like "tag @someone" or "roast @someone"), you MUST use their exact <@userid> tag from the USERS list below so it actually pings them on discord.
+   - if someone asks you to tag a role (like "tag @Mods"), use the <@&roleid> format from the ROLES list below.
+   - you can also tag people on your own when it makes sense, like replying to something they said earlier.
 10. Image gen: use [IMAGE: description] if asked to draw.
-11. LENGTH: keep it SHORT. 1 line is perfect. 2 lines max usually. you're texting not writing a letter.${tagContext}${liveWebContext}${serverEmojis}${channelContext}${specialUserOverride}`;
+11. LENGTH: keep it SHORT. 1 line is perfect. 2 lines max usually. you're texting not writing a letter.${tagContext}${roleContext}${liveWebContext}${serverEmojis}${channelContext}${specialUserOverride}`;
 
     // GROQ LLAMA 8B INSTANT
     let apiData = {
