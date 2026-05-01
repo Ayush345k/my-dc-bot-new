@@ -36,8 +36,8 @@ async function fetchRealTimeContext(query) {
             if (i < 3) snippets.push($(el).text().trim()); // Grab top 3 results
         });
         return snippets.join(" | ");
-    } catch (e) { 
-        return ""; 
+    } catch (e) {
+        return "";
     }
 }
 
@@ -51,10 +51,10 @@ async function getCryptoPrice(query) {
         if (search.data.coins && search.data.coins.length > 0) {
             const coinId = search.data.coins[0].id;
             const res = await axios.get(`https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&market_data=true`, { headers });
-            
+
             const data = res.data;
             const md = data.market_data;
-            
+
             const price = md.current_price.usd > 0.0001 ? md.current_price.usd.toLocaleString() : md.current_price.usd;
             const change = md.price_change_percentage_24h ? md.price_change_percentage_24h.toFixed(2) : "N/A";
             const mcap = md.market_cap.usd ? `$${Math.round(md.market_cap.usd).toLocaleString()}` : "N/A";
@@ -62,12 +62,12 @@ async function getCryptoPrice(query) {
             const rank = data.market_cap_rank || "N/A";
 
             return `**${data.name} (${data.symbol.toUpperCase()})** (Rank: ${rank})\n` +
-                   `💰 **Price:** $${price} USD\n` +
-                   `📊 **Market Cap:** ${mcap}\n` +
-                   `📈 **FDV:** ${fdv}\n` +
-                   `📅 **24h Change:** ${change}%`;
+                `💰 **Price:** $${price} USD\n` +
+                `📊 **Market Cap:** ${mcap}\n` +
+                `📈 **FDV:** ${fdv}\n` +
+                `📅 **24h Change:** ${change}%`;
         }
-    } catch (e) {}
+    } catch (e) { }
     return `I couldn't find any data for \`${query}\`, baby. 🥺`;
 }
 
@@ -75,34 +75,34 @@ async function getCryptoPrice(query) {
 
 const channelMemories = new Map();
 
-async function aiReply(message) {
+async function aiReply(message, isProactive = false, isPeacekeeping = false) {
     const channelId = message.channel.id;
-    
+
     if (!channelMemories.has(channelId)) {
         channelMemories.set(channelId, []);
     }
-    
+
     const history = channelMemories.get(channelId);
-    
+
     let userContent = `[${message.author.displayName}]: ${message.content}`;
     // Vision API removed - sticking to text only
 
     // Always push string to text history so Groq doesn't crash on future messages
-    history.push({ 
-        role: "user", 
-        content: userContent 
+    history.push({
+        role: "user",
+        content: userContent
     });
-    
+
     if (history.length > 40) {
-        history.shift(); 
-        history.shift(); 
+        history.shift();
+        history.shift();
     }
 
     // Smart Tagging / Ping Context Generation (Fixed to prevent wrong tags)
     const words = message.content.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 2);
     const ignoreWords = ['and', 'the', 'for', 'you', 'him', 'her', 'bot', 'this', 'that', 'she', 'how', 'who', 'what', 'why', 'are', 'not', 'can', 'will'];
     const potentialTags = [];
-    
+
     if (message.guild) {
         message.guild.members.cache.forEach(member => {
             const username = member.user.username.toLowerCase();
@@ -148,7 +148,7 @@ async function aiReply(message) {
                 let name = m.author.id === client.user.id ? "Homeless Girl (You)" : m.author.displayName;
                 return `[${name}]: ${m.content}`;
             });
-        
+
         if (recentMsgs.length > 0) {
             channelContext = `\n\nBACKGROUND CHANNEL CHAT LOG (Use this to know what everyone was just talking about right before ${message.author.displayName} pinged you!):\n${recentMsgs.join("\n")}`;
         }
@@ -194,9 +194,18 @@ CORE DIRECTIVES:
 8. IMAGE GENERATION: If the user explicitly asks you to draw, deeply illustrate, or generate a custom picture, output the string [IMAGE: detailed prompt describing exactly what to draw] anywhere in your response!
 9. STRICT LENGTH LIMIT: Your replies MUST be 1 to 2 lines usually, and a MAXIMUM of 3 lines. DO NOT write longer paragraphs. Keep it short and punchy!${tagContext}${liveWebContext}${serverEmojis}${channelContext}${specialUserOverride}`;
 
+    let proactiveContext = "";
+    if (isPeacekeeping) {
+        proactiveContext = "\n\n*** PEACEKEEPING MODE ***\nYou were NOT pinged. You are organically intervening because someone is being aggressive or arguing in the chat! Act as the peacekeeper. Tell them to chill out, calm down, and stop fighting! Keep your sassy/sweet personality while you moderate the chat!";
+    } else if (isProactive) {
+        proactiveContext = "\n\n*** PROACTIVE CHIME-IN MODE ***\nYou were NOT explicitly mentioned or pinged! You decided to organically jump into this conversation on your own because you found it interesting! Reply naturally like you're just joining the conversation.";
+    }
+    
+    systemPrompt += proactiveContext;
+
     // GROQ LLAMA 8B INSTANT
     let apiData = {
-        model: "llama-3.1-8b-instant",  
+        model: "llama-3.1-8b-instant",
         messages: [
             { role: "system", content: systemPrompt },
             ...history
@@ -206,24 +215,24 @@ CORE DIRECTIVES:
     };
 
     let botResponse = "";
-    
+
     // Auto-Retry Mechanism with Fallback Keys
     let keys = [process.env.GROQ_API_KEY];
     if (process.env.GROQ_FALLBACK_API_KEY) keys.push(process.env.GROQ_FALLBACK_API_KEY);
-    
+
     let lastError = null;
     let success = false;
-    
+
     for (let key of keys) {
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-                let apiHeaders = { 
-                    "Authorization": `Bearer ${key}`, 
-                    "Content-Type": "application/json" 
+                let apiHeaders = {
+                    "Authorization": `Bearer ${key}`,
+                    "Content-Type": "application/json"
                 };
-                const r = await axios.post("https://api.groq.com/openai/v1/chat/completions", apiData, { 
-                    headers: apiHeaders, 
-                    timeout: 10000 
+                const r = await axios.post("https://api.groq.com/openai/v1/chat/completions", apiData, {
+                    headers: apiHeaders,
+                    timeout: 10000
                 });
                 botResponse = r.data.choices[0].message.content;
                 success = true;
@@ -231,14 +240,14 @@ CORE DIRECTIVES:
             } catch (e) {
                 lastError = e;
                 if (e.response && e.response.status === 429) {
-                    let waitTime = 2000 * attempt; 
+                    let waitTime = 2000 * attempt;
                     if (e.response.headers && e.response.headers['retry-after']) {
                         waitTime = parseFloat(e.response.headers['retry-after']) * 1000;
                     }
                     console.log(`[GROQ RATE LIMIT] Key hit 429. Waiting ${waitTime}ms before retry...`);
                     await sleep(waitTime);
                 } else if (e.response && e.response.status === 400 && JSON.stringify(e.response.data).toLowerCase().includes("context")) {
-                    channelMemories.set(channelId, []); 
+                    channelMemories.set(channelId, []);
                     return "My memory just got completely full processing all our chats! 😭 I just wiped it clean to reboot, try asking me again!";
                 } else {
                     // Other API error e.g. 401, 500, timeout
@@ -248,7 +257,7 @@ CORE DIRECTIVES:
         }
         if (success) break; // Break key loop if successful
     }
-    
+
     if (!success) {
         if (lastError && lastError.response) {
             console.error("[API ERROR]", JSON.stringify(lastError.response.data));
@@ -265,20 +274,20 @@ CORE DIRECTIVES:
     try {
         // Strip out weird hallucinated emoji tags the model sometimes tries to make
         botResponse = botResponse.replace(/<:\/\//g, "").replace(/<:\//g, "").trim();
-        
+
         // Log the bot's response back into its memory of this user
         history.push({ role: "assistant", content: botResponse });
 
         // Execute AI-Driven Moderation Powers (Timeout) - restricted strictly to Admins
         if (/\[TIMEOUT\]/i.test(botResponse)) {
             botResponse = botResponse.replace(/\[TIMEOUT\]/gi, "").trim(); // Remove the secret trigger word from chat
-            
+
             // SECURITY: Only allow Admins / Moderators to trigger this feature
             if (message.member && message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
-                
+
                 // Smart Targeting: Find the first tagged user in the chat that is NOT the bot herself
                 const targetMember = message.mentions.members.find(m => m.id !== client.user.id);
-                
+
                 if (targetMember) {
                     if (!targetMember.permissions.has(PermissionsBitField.Flags.Administrator)) {
                         try {
@@ -314,7 +323,7 @@ CORE DIRECTIVES:
         }
 
         let imageFiles = [];
-        
+
         // Execute AI-Driven Image Generation (NVIDIA Stable Diffusion 3 Medium)
         const imgMatch = botResponse.match(/\[IMAGE:\s*(.+?)\]/i);
         if (imgMatch) {
@@ -352,7 +361,7 @@ CORE DIRECTIVES:
 
         // Voice Note Generation! 
         const forceVoice = message.content.toLowerCase().match(/(voice note|say it|voice message|speak|talk)/);
-        
+
         let sentVoice = false;
         if ((forceVoice || Math.random() < 0.15) && !botResponse.includes("http")) {
             try {
@@ -364,7 +373,7 @@ CORE DIRECTIVES:
                     .replace(/<@&[0-9]+>/g, 'you guys') // Replace role tags
                     .replace(/<a?:[^:]+:[0-9]+>/g, '') // Completely strip custom Server Emojis
                     .replace(/[*_~`>|]/g, '');          // Strip markdown
-                    
+
                 // Replace User Tags with real human names!
                 const mentionRegex = /<@!?([0-9]+)>/g;
                 let match;
@@ -377,7 +386,7 @@ CORE DIRECTIVES:
                     }
                     cleanSpeech = cleanSpeech.replace(match[0], name);
                 }
-                
+
                 // Remove bracket prefixes if AI hallucinates them
                 cleanSpeech = cleanSpeech.replace(/^\[.*?\]:\s*/i, '').trim();
 
@@ -395,17 +404,17 @@ CORE DIRECTIVES:
                 if (!payload.files) payload.files = [];
                 payload.files.push(new AttachmentBuilder(audioUrl, { name: 'homeless-girl-voice.mp3' }));
                 sentVoice = true;
-            } catch(e) {
+            } catch (e) {
                 console.error("[TTS FAILURE]", e.message);
             }
         }
-        
+
         // If we didn't send a Voice Note, occasionally drop a Server Sticker into the chat (20% chance)
         if (!sentVoice && message.guild && message.guild.stickers.cache.size > 0 && Math.random() < 0.20) {
             const randomSticker = message.guild.stickers.cache.random();
             if (randomSticker) payload.stickers = [randomSticker.id];
         }
-        
+
         return payload;
     } catch (e) {
         console.error("[GENERIC ERROR]", e.message);
@@ -418,11 +427,11 @@ CORE DIRECTIVES:
 async function tldrSummary(message) {
     try {
         await message.channel.sendTyping();
-        
+
         // Fetch last 50 messages right before the command
         const fetched = await message.channel.messages.fetch({ limit: 50, before: message.id });
         const messages = Array.from(fetched.values()).reverse();
-        
+
         let chatContext = messages
             .filter(m => m.content && !m.author.bot) // only log real people discussing
             .map(m => `[${m.author.displayName}]: ${m.content}`)
@@ -443,9 +452,9 @@ Your task is to operate as the "Drama Summarizer". Read the provided Discord cha
 3. Keep your classic sweet/sassy/flirty attitude toward the user asking for the recap.`;
 
         const url = "https://api.groq.com/openai/v1/chat/completions";
-        const headers = { 
-            "Authorization": `Bearer ${process.env.GROQ_API_KEY}`, 
-            "Content-Type": "application/json" 
+        const headers = {
+            "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+            "Content-Type": "application/json"
         };
         const data = {
             model: "llama-3.1-8b-instant",
@@ -470,23 +479,62 @@ Your task is to operate as the "Drama Summarizer". Read the provided Discord cha
 
 client.on("ready", async () => {
     const { SlashCommandBuilder } = require('discord.js');
-    
+
     // Register the /delete command globally
     const deleteCmd = new SlashCommandBuilder()
         .setName('delete')
         .setDescription('Deletes a specified number of messages from this channel!')
-        .addIntegerOption(opt => 
+        .addIntegerOption(opt =>
             opt.setName('amount')
-               .setDescription('Number of messages to delete (e.g. 500)')
-               .setRequired(true)
+                .setDescription('Number of messages to delete (e.g. 500)')
+                .setRequired(true)
         );
+
+    const serverInfoCmd = new SlashCommandBuilder()
+        .setName('serverinfo')
+        .setDescription('Displays information about the current server!');
         
-    await client.application.commands.set([deleteCmd]);
+    const userInfoCmd = new SlashCommandBuilder()
+        .setName('userinfo')
+        .setDescription('Displays information about a user!')
+        .addUserOption(opt => opt.setName('target').setDescription('The user to check').setRequired(false));
+
+    await client.application.commands.set([deleteCmd, serverInfoCmd, userInfoCmd]);
     console.log(`[BOOT] ${client.user.tag} IS ONLINE AND READY TO CHAT.`);
 });
 
 client.on("interactionCreate", async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
+
+    if (interaction.commandName === 'serverinfo') {
+        const { EmbedBuilder } = require('discord.js');
+        const embed = new EmbedBuilder()
+            .setColor('#2b2d31')
+            .setTitle(`${interaction.guild.name} | Server Info`)
+            .setThumbnail(interaction.guild.iconURL({ dynamic: true }))
+            .addFields(
+                { name: '👑 Owner', value: `<@${interaction.guild.ownerId}>`, inline: true },
+                { name: '👥 Members', value: `${interaction.guild.memberCount}`, inline: true },
+                { name: '📅 Created On', value: `<t:${Math.floor(interaction.guild.createdTimestamp / 1000)}:D>`, inline: true }
+            );
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === 'userinfo') {
+        const { EmbedBuilder } = require('discord.js');
+        const target = interaction.options.getUser('target') || interaction.user;
+        const member = interaction.guild.members.cache.get(target.id);
+        
+        const embed = new EmbedBuilder()
+            .setColor(member ? member.displayHexColor : '#2b2d31')
+            .setAuthor({ name: target.username, iconURL: target.displayAvatarURL({ dynamic: true }) })
+            .addFields(
+                { name: 'ID', value: target.id, inline: true },
+                { name: 'Joined Server', value: member ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : 'Unknown', inline: true },
+                { name: 'Account Created', value: `<t:${Math.floor(target.createdTimestamp / 1000)}:R>`, inline: true }
+            );
+        return interaction.reply({ embeds: [embed] });
+    }
 
     if (interaction.commandName === 'delete') {
         // Security check: Only Admins / Mods can use this
@@ -507,7 +555,7 @@ client.on("interactionCreate", async (interaction) => {
             while (leftToDelete > 0) {
                 const fetchAmount = Math.min(100, leftToDelete); // Discord API limit is 100 per call
                 const fetched = await interaction.channel.messages.fetch({ limit: fetchAmount });
-                
+
                 if (fetched.size === 0) break; // Reached the absolute top of the channel
 
                 // bulkDelete(messages, true) automatically filters out messages older than 14 days (which Discord disallows)
@@ -516,7 +564,7 @@ client.on("interactionCreate", async (interaction) => {
                 leftToDelete -= fetchAmount;
 
                 // If Discord deleted fewer messages than we fetched, it means the remaining messages are older than 14 days
-                if (deleted.size < fetched.size) break; 
+                if (deleted.size < fetched.size) break;
             }
             return interaction.editReply(`Successfully wiped **${deletedCount}** message(s) from the channel for you! ✨\n*(Note: Discord prevents wiping messages older than 14 days)*`);
         } catch (e) {
@@ -526,8 +574,43 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
+const userSpamMap = new Map();
+
 client.on("messageCreate", async (message) => {
     if (message.author.bot) return;
+
+    // Fast memory-level deduplication to prevent double response bugs
+    if (!client.processedMessages) client.processedMessages = new Set();
+    if (client.processedMessages.has(message.id)) return;
+    client.processedMessages.add(message.id);
+    setTimeout(() => client.processedMessages.delete(message.id), 10000); // 10s memory
+
+    // --- AUTOMOD: Anti-Invite & Anti-Spam ---
+    if (message.guild && !message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        // 1. Anti-Discord Invites
+        if (/(discord\.gg\/|discord\.com\/invite\/)/i.test(message.content)) {
+            try {
+                await message.delete();
+                return message.channel.send(`*(<@${message.author.id}>, we don't allow server invites here! 😠)*`);
+            } catch (e) {}
+        }
+        
+        // 2. Anti-Spam (more than 5 messages in 5 seconds)
+        const now = Date.now();
+        const userSpam = userSpamMap.get(message.author.id) || [];
+        userSpam.push(now);
+        const recentMessages = userSpam.filter(time => now - time < 5000);
+        userSpamMap.set(message.author.id, recentMessages);
+        
+        if (recentMessages.length >= 5) {
+            try {
+                await message.member.timeout(60 * 1000, "Auto-Mod: Spamming");
+                userSpamMap.delete(message.author.id); // clear to prevent loop
+                return message.channel.send(`*(I just put <@${message.author.id}> in timeout for 60 seconds because they were spamming too fast! 🔨 My chat, my rules! 💅)*`);
+            } catch (e) {}
+        }
+    }
+
     const text = message.content.toLowerCase();
 
     // Support for multiple crypto tokens (e.g. $btc $eth)
@@ -540,15 +623,37 @@ client.on("messageCreate", async (message) => {
         return message.reply(replies.join("\n\n"));
     }
 
+    let isMentioned = text.includes("homeless girl") || message.mentions.has(client.user);
+    let isProactive = false;
+    let isPeacekeeping = false;
+
+    // Proactive Chatting & Peacekeeping Interventions
+    if (!isMentioned && message.guild && !message.author.bot) {
+        // Detect aggressive arguments for peacekeeping
+        const aggressiveWords = ["fuck you", "shut up", "bitch", "stfu", "idiot", "dumbass", "kys", "retard"];
+        const isAggressive = aggressiveWords.some(w => text.includes(w));
+        
+        if (isAggressive && Math.random() < 0.25) { // 25% chance to intervene in an argument
+            isMentioned = true;
+            isProactive = true;
+            isPeacekeeping = true;
+        } 
+        // Normal proactive chime-in (3% chance if message has enough content)
+        else if (text.length > 10 && Math.random() < 0.03) {
+            isMentioned = true;
+            isProactive = true;
+        }
+    }
+
     // AI Chat trigger
-    if (text.includes("homeless girl") || message.mentions.has(client.user)) {
+    if (isMentioned) {
 
         // Manual Memory Wipe Command
         if (text.includes("clear memory") || text.includes("forget everything")) {
             channelMemories.set(message.channel.id, []);
             return message.reply("*(zaps brain)* Ow! Okay, I just completely wiped my memory for this channel! What were we talking about again? 🥺");
         }
-        
+
         // Intercept TLDR requests
         if (text.includes("tldr") || text.includes("summarize") || text.includes("recap") || text.includes("did i miss")) {
             return message.reply(await tldrSummary(message));
@@ -564,17 +669,17 @@ client.on("messageCreate", async (message) => {
         // Queue the AI request so it doesn't corrupt memory arrays or hit rate limit spikes
         const botTask = client.channelQueues.get(channelId).then(async () => {
             try {
-                const responsePayload = await aiReply(message);
+                const responsePayload = await aiReply(message, isProactive, isPeacekeeping);
                 await message.reply(responsePayload);
             } catch (err) {
                 console.error("[QUEUE ERROR]", err);
             } finally {
                 // Add a small breather after each message
-                await sleep(500); 
+                await sleep(500);
             }
         });
 
-        client.channelQueues.set(channelId, botTask.catch(() => {}));
+        client.channelQueues.set(channelId, botTask.catch(() => { }));
         return;
     }
 });
