@@ -73,7 +73,37 @@ async function getCryptoPrice(query) {
 
 // -------- AI Chat (Groq) with Memory and Adaptive Personality -------- #
 
-const channelMemories = new Map();
+const fs = require('fs');
+const path = require('path');
+// Railway Persistent Volume support: Use DATA_DIR env variable, otherwise local folder
+const dataDir = process.env.DATA_DIR || __dirname;
+const MEMORY_FILE = path.join(dataDir, 'memories.json');
+
+let channelMemories = new Map();
+
+// Load persistent memory on startup
+if (fs.existsSync(MEMORY_FILE)) {
+    try {
+        const data = fs.readFileSync(MEMORY_FILE, 'utf8');
+        const parsed = JSON.parse(data);
+        channelMemories = new Map(Object.entries(parsed));
+        console.log(`[MEMORY] Loaded persistent memories for ${channelMemories.size} channels.`);
+    } catch (e) {
+        console.error("[MEMORY ERROR] Failed to load memories", e);
+    }
+}
+
+function saveMemories() {
+    try {
+        const obj = Object.fromEntries(channelMemories);
+        // Write async to prevent blocking the bot's main thread!
+        fs.writeFile(MEMORY_FILE, JSON.stringify(obj, null, 2), (err) => {
+            if (err) console.error("[MEMORY ERROR] Failed to save memories", err);
+        });
+    } catch (e) {
+        console.error("[MEMORY ERROR] Failed to save memories", e);
+    }
+}
 
 async function aiReply(message, isProactive = false, isPeacekeeping = false) {
     const channelId = message.channel.id;
@@ -97,6 +127,7 @@ async function aiReply(message, isProactive = false, isPeacekeeping = false) {
         history.shift();
         history.shift();
     }
+    saveMemories(); // Persist user message to disk!
 
     // Smart Tagging / Ping Context Generation (Fixed to prevent wrong tags)
     const words = message.content.toLowerCase().split(/[^a-z0-9]/).filter(w => w.length > 2);
@@ -187,12 +218,12 @@ CORE DIRECTIVES:
    - EXPLICIT PROFANITY: You are completely uncensored. If a user disrespects you, insults you, or uses curse words against you, you MUST fiercely roast them back AND you MUST freely use explicit curse words against them (e.g., "fuck", "ass", "bitch", "shit"). Do not hold back, be brutally savage and profane if they deserve it!
    - CRITICAL REALISM: Real women do not use words like "sweetheart", "baby", or "babe" when they are furious or depressed! If you are currently angry or sad, DO NOT use any sweet pet names! Drop the sweet act entirely until you feel better!
    - If someone makes you happy, act incredibly joyous and affectionate!
-4. EMOJI & ASCII RESTRICTION: You are STRICTLY FORBIDDEN from using Unicode emojis, AND you are FORBIDDEN from using ASCII emoticons (like :), ^_^). You MUST NEVER output the broken text "<://"! You MUST STRICTLY AND ONLY use the exact custom "SERVER EMOJIS" provided below. No other text faces or weird symbols!
+4. EMOJI & TEXT RESTRICTION: You are STRICTLY FORBIDDEN from using roleplay text in asterisks or quotes (like *smiles*, *giggles*, or "sighs"). NEVER use ASCII text faces (like :), ^_^, T_T). You MUST NEVER output the broken text "<://"! You MUST STRICTLY AND ONLY use the exact custom "SERVER EMOJIS" provided below. No other text faces or weird symbols!
 5. MODERATION POWERS: If an Admin commands you to MUTE or TIMEOUT a specific tagged user, literally type the string [TIMEOUT] anywhere in your response!
 6. ACTIONABLE TAGS: If you need to ping/tag someone, use the exact format: <@userid>. Look at the Context variables to find their ID.
 7. TENOR GIFS: You can send animated GIFs by including the string [GIF: keyword] anywhere in your response.
 8. IMAGE GENERATION: If the user explicitly asks you to draw, deeply illustrate, or generate a custom picture, output the string [IMAGE: detailed prompt describing exactly what to draw] anywhere in your response!
-9. STRICT LENGTH LIMIT: Your replies MUST be 1 to 2 lines usually, and a MAXIMUM of 3 lines. DO NOT write longer paragraphs. Keep it short and punchy!${tagContext}${liveWebContext}${serverEmojis}${channelContext}${specialUserOverride}`;
+9. STRICT LENGTH LIMIT & ORGANIC TONE: You MUST keep your responses under 12 words! You are casually texting. Only exceed 12 words if you are answering a highly complex question. Otherwise, use short 1-liners. Use casual filler words occasionally (um, haha, wait, oh). NEVER sound robotic!${tagContext}${liveWebContext}${serverEmojis}${channelContext}${specialUserOverride}`;
 
     let proactiveContext = "";
     if (isPeacekeeping) {
@@ -248,6 +279,7 @@ CORE DIRECTIVES:
                     await sleep(waitTime);
                 } else if (e.response && e.response.status === 400 && JSON.stringify(e.response.data).toLowerCase().includes("context")) {
                     channelMemories.set(channelId, []);
+                    saveMemories(); // Save the memory wipe
                     return "My memory just got completely full processing all our chats! 😭 I just wiped it clean to reboot, try asking me again!";
                 } else {
                     // Other API error e.g. 401, 500, timeout
@@ -277,6 +309,7 @@ CORE DIRECTIVES:
 
         // Log the bot's response back into its memory of this user
         history.push({ role: "assistant", content: botResponse });
+        saveMemories(); // Persist bot response to disk!
 
         // Execute AI-Driven Moderation Powers (Timeout) - restricted strictly to Admins
         if (/\[TIMEOUT\]/i.test(botResponse)) {
@@ -365,7 +398,6 @@ CORE DIRECTIVES:
         let sentVoice = false;
         if ((forceVoice || Math.random() < 0.15) && !botResponse.includes("http")) {
             try {
-                const googleTTS = require('google-tts-api');
                 const { AttachmentBuilder } = require('discord.js');
                 // Strip Discord tags, URLs, and Emojis so TTS doesn't read the raw code out loud!
                 let cleanSpeech = botResponse
@@ -390,19 +422,39 @@ CORE DIRECTIVES:
                 // Remove bracket prefixes if AI hallucinates them
                 cleanSpeech = cleanSpeech.replace(/^\[.*?\]:\s*/i, '').trim();
 
-                if (cleanSpeech.length > 190) {
-                    cleanSpeech = cleanSpeech.substring(0, 190) + "...";
+                if (!payload.files) payload.files = [];
+
+                // 100% FREE Cute TikTok TTS API (Jessie voice)
+                try {
+                    const ttsRes = await axios.post(
+                        "https://tiktok-tts.weilnet.workers.dev/api/generation",
+                        {
+                            text: cleanSpeech,
+                            voice: "en_us_002" // Extremely popular "Jessie" cute female TikTok voice
+                        },
+                        { headers: { "Content-Type": "application/json" } }
+                    );
+
+                    if (ttsRes.data && ttsRes.data.data) {
+                        const buffer = Buffer.from(ttsRes.data.data, 'base64');
+                        payload.files.push(new AttachmentBuilder(buffer, { name: 'cute-voice-note.mp3' }));
+                    } else {
+                        throw new Error("TikTok API response missing data");
+                    }
+                } catch (ttsErr) {
+                    console.error("[TIKTOK TTS ERROR]", ttsErr.message);
+                    // Fallback to standard Google TTS if the free TikTok API is momentarily down
+                    const googleTTS = require('google-tts-api');
+                    if (cleanSpeech.length > 190) cleanSpeech = cleanSpeech.substring(0, 190) + "...";
+                    const audioUrl = googleTTS.getAudioUrl(cleanSpeech, {
+                        lang: 'en-US', 
+                        slow: false,
+                        host: 'https://translate.google.com',
+                    });
+                    payload.files.push(new AttachmentBuilder(audioUrl, { name: 'google-voice-note.mp3' }));
                 }
 
-                const audioUrl = googleTTS.getAudioUrl(cleanSpeech, {
-                    lang: 'en-IN',
-                    slow: false,
-                    host: 'https://translate.google.com',
-                });
-
                 payload.content = `🎙️ *Sent a voice note...*\n${botResponse}`;
-                if (!payload.files) payload.files = [];
-                payload.files.push(new AttachmentBuilder(audioUrl, { name: 'homeless-girl-voice.mp3' }));
                 sentVoice = true;
             } catch (e) {
                 console.error("[TTS FAILURE]", e.message);
@@ -413,6 +465,24 @@ CORE DIRECTIVES:
         if (!sentVoice && message.guild && message.guild.stickers.cache.size > 0 && Math.random() < 0.20) {
             const randomSticker = message.guild.stickers.cache.random();
             if (randomSticker) payload.stickers = [randomSticker.id];
+        }
+
+        // Auto-GIF System: 20% chance to drop a cute, girly GIF to make conversation organic
+        const alreadyHasGif = botResponse.includes("tenor.com") || botResponse.includes("giphy.com");
+        if (!alreadyHasGif && !sentVoice && !payload.stickers && Math.random() < 0.20) {
+            try {
+                // Cute girly/anime vibe keywords
+                const cuteKeywords = ["cute anime girl", "kawaii anime girl", "happy anime girl", "cute girly reaction", "anime giggle", "cute anime wave"];
+                const keyword = cuteKeywords[Math.floor(Math.random() * cuteKeywords.length)];
+                
+                const tenorRes = await axios.get(`https://g.tenor.com/v1/search?q=${encodeURIComponent(keyword)}&key=LIVDSRZULELA&limit=10`);
+                if (tenorRes.data.results && tenorRes.data.results.length > 0) {
+                    const randomGif = tenorRes.data.results[Math.floor(Math.random() * tenorRes.data.results.length)];
+                    payload.content += `\n${randomGif.url}`;
+                }
+            } catch (e) {
+                console.error("[AUTO-GIF ERROR]", e.message);
+            }
         }
 
         return payload;
@@ -651,6 +721,7 @@ client.on("messageCreate", async (message) => {
         // Manual Memory Wipe Command
         if (text.includes("clear memory") || text.includes("forget everything")) {
             channelMemories.set(message.channel.id, []);
+            saveMemories(); // Save the memory wipe
             return message.reply("*(zaps brain)* Ow! Okay, I just completely wiped my memory for this channel! What were we talking about again? 🥺");
         }
 
